@@ -382,6 +382,7 @@ select {
   color: var(--text);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
+  margin-top: 1rem;
 }
 
 input[type="file"] {
