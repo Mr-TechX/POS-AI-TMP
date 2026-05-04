@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>POS Web</title>
+  <link id="dynamic-favicon" rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%234fa2ff'/%3E%3Ctext x='50%25' y='56%25' text-anchor='middle' font-size='26' fill='white' font-family='Arial'%3EP%3C/text%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <section id="auth-screen" class="auth-screen">
+    <article class="card auth-card">
+      <div class="brand-block auth-brand">
+        <img id="auth-store-logo" class="store-logo hidden" alt="Logo del negocio" />
+        <div class="logo-fallback" id="auth-logo-fallback">POS</div>
+        <div>
+          <h1 id="auth-store-name">POS Web</h1>
+          <p id="auth-store-subtitle" class="subtitle">Punto de venta para PyMES</p>
+        </div>
+      </div>
+      <h2>Iniciar sesion</h2>
+      <form id="auth-form" class="form">
+        <label>Usuario <input id="auth-username" required autocomplete="username" /></label>
+        <label>Contrasena <input id="auth-password" type="password" required autocomplete="current-password" /></label>
+        <button class="btn" type="submit">Entrar</button>
+      </form>
+      <p id="auth-error" class="auth-error small hidden">Credenciales invalidas.</p>
+      <div class="auth-hint">
+        <p class="small">Cuentas demo:</p>
+        <ul class="small list">
+          <li>Administrador: <code>admin</code> / <code>Admin123!</code></li>
+          <li>Vendedor: <code>vendedor</code> / <code>Venta123!</code></li>
+          <li>Almacen: <code>almacen</code> / <code>Stock123!</code></li>
+        </ul>
+      </div>
+    </article>
+  </section>
+
+  <div id="app-shell" class="hidden">
+  <header class="topbar">
+    <div class="brand-block">
+      <img id="store-logo" class="store-logo hidden" alt="Logo del negocio" />
+      <div class="logo-fallback" id="logo-fallback">POS</div>
+      <div>
+      <h1 id="store-name">POS Web</h1>
+      <p id="store-subtitle" class="subtitle">Punto de venta para PyMES</p>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <button
+        id="mobile-menu-toggle"
+        class="hamburger-btn"
+        type="button"
+        aria-label="Abrir menu"
+        aria-expanded="false"
+        aria-controls="tabs"
+      >
+        <span class="hamburger-icon" aria-hidden="true"></span>
+        Menu
+      </button>
+      <span id="current-user-badge" class="badge user-badge"></span>
+      <button id="logout-btn" class="btn ghost">Cerrar sesion</button>
+      <button id="reset-demo" class="btn ghost">Reiniciar demo</button>
+      <button id="export-data" class="btn">Exportar JSON</button>
+    </div>
+  </header>
+
+  <nav class="tabs" id="tabs">
+    <button class="tab active" data-view="dashboard">Dashboard</button>
+    <button class="tab" data-view="pos">POS</button>
+    <button class="tab" data-view="products">Productos</button>
+    <button class="tab" data-view="sales">Ventas</button>
+    <button class="tab" data-view="cashflow">Flujo de caja</button>
+    <button class="tab" data-view="settings">Configuracion</button>
+  </nav>
+
+  <main>
+    <section id="dashboard" class="view active">
+      <h2>Resumen</h2>
+      <div class="kpi-grid">
+        <article class="card">
+          <p>Ventas hoy</p>
+          <strong id="kpi-sales-today">$0.00</strong>
+        </article>
+        <article class="card">
+          <p>Tickets hoy</p>
+          <strong id="kpi-tickets-today">0</strong>
+        </article>
+        <article class="card">
+          <p>Promedio ticket</p>
+          <strong id="kpi-avg-ticket">$0.00</strong>
+        </article>
+        <article class="card">
+          <p>Productos bajos</p>
+          <strong id="kpi-low-stock">0</strong>
+        </article>
+      </div>
+
+      <div class="grid two">
+        <article class="card">
+          <h3>Alertas de inventario</h3>
+          <ul id="low-stock-list" class="list"></ul>
+        </article>
+        <article class="card">
+          <h3>Recomendaciones inteligentes</h3>
+          <ul id="recommendations-list" class="list recommendations"></ul>
+        </article>
+      </div>
+
+      <div class="grid two">
+        <article class="card">
+          <h3>Grafica de productos mas vendidos</h3>
+          <div id="top-chart" class="chart-list"></div>
+        </article>
+        <article class="card">
+          <h3>Grafica de productos menos vendidos</h3>
+          <div id="low-demand-chart" class="chart-list"></div>
+        </article>
+      </div>
+    </section>
+
+    <section id="pos" class="view">
+      <h2>Punto de Venta</h2>
+      <div class="grid pos-grid">
+        <article class="card">
+          <div class="row">
+            <input id="product-search" type="search" placeholder="Buscar producto..." />
+          </div>
+          <div id="product-catalog" class="catalog"></div>
+        </article>
+
+        <article class="card cart-card">
+          <h3>Carrito</h3>
+          <ul id="cart-list" class="cart-list"></ul>
+          <div class="total-block">
+            <p>Subtotal: <strong id="cart-subtotal">$0.00</strong></p>
+            <p>Impuesto: <strong id="cart-tax">$0.00</strong></p>
+            <p class="grand-total">Total: <strong id="cart-total">$0.00</strong></p>
+          </div>
+          <div class="checkout-controls">
+            <label>
+              Caja activa
+              <select id="cash-register-select"></select>
+            </label>
+            <label>
+              Vendedor a cargo
+              <input id="cashier-name-input" type="text" maxlength="60" placeholder="Nombre del vendedor" />
+            </label>
+            <label>
+              Metodo de pago
+              <select id="payment-method">
+                <option value="cash">Efectivo</option>
+                <option value="card">Tarjeta</option>
+                <option value="hybrid">Mixto</option>
+              </select>
+            </label>
+            <label id="cash-amount-field">
+              Efectivo recibido
+              <input id="amount-paid" type="number" min="0" step="0.01" placeholder="0.00" />
+            </label>
+            <label id="card-amount-field" class="hidden">
+              Monto en tarjeta
+              <input id="card-amount-paid" type="number" min="0" step="0.01" placeholder="0.00" />
+            </label>
+            <p>Cambio: <strong id="change-value">$0.00</strong></p>
+            <button id="checkout-btn" class="btn">Cobrar</button>
+            <button id="clear-cart-btn" class="btn ghost">Vaciar carrito</button>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section id="products" class="view">
+      <h2>Productos</h2>
+      <div class="grid two">
+        <article class="card">
+          <h3>Alta / Edicion</h3>
+          <form id="product-form" class="form">
+            <input type="hidden" id="product-id" />
+            <label>Nombre <input id="product-name" required /></label>
+            <label>SKU <input id="product-sku" required /></label>
+            <label>Precio <input id="product-price" type="number" min="0" step="0.01" required /></label>
+            <label>Stock <input id="product-stock" type="number" min="0" step="1" required /></label>
+            <label>Stock minimo <input id="product-min-stock" type="number" min="0" step="1" required /></label>
+            <div class="row">
+              <button type="submit" class="btn">Guardar</button>
+              <button type="button" id="product-cancel" class="btn ghost">Cancelar</button>
+            </div>
+          </form>
+        </article>
+
+        <article class="card">
+          <h3>Catalogo</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>SKU</th>
+                  <th>Nombre</th>
+                  <th>Precio</th>
+                  <th>Stock</th>
+                  <th>Min</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="products-table"></tbody>
+            </table>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section id="sales" class="view">
+      <h2>Historial de ventas</h2>
+      <div class="grid sales-layout">
+        <article class="card">
+          <div class="row">
+            <label>
+              Desde
+              <input id="filter-from" type="date" />
+            </label>
+            <label>
+              Hasta
+              <input id="filter-to" type="date" />
+            </label>
+            <button id="apply-filters" class="btn">Filtrar</button>
+            <button id="clear-filters" class="btn ghost">Limpiar</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Folio</th>
+                  <th>Fecha</th>
+                  <th>Caja</th>
+                  <th>Vendedor</th>
+                  <th>Items</th>
+                  <th>Metodo</th>
+                  <th>Total</th>
+                </tr>
+              </thead>
+              <tbody id="sales-table"></tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="card sales-ticket-panel">
+          <h3>Ticket</h3>
+          <div id="sales-ticket-content" class="sales-ticket-content"></div>
+        </article>
+      </div>
+    </section>
+
+    <section id="cashflow" class="view">
+      <h2>Flujo de caja</h2>
+      <div class="kpi-grid">
+        <article class="card">
+          <p>Capital inicial total</p>
+          <strong id="cashflow-kpi-initial">$0.00</strong>
+        </article>
+        <article class="card">
+          <p>Ventas totales (todas las cajas)</p>
+          <strong id="cashflow-kpi-sales">$0.00</strong>
+        </article>
+        <article class="card">
+          <p>Total acumulado en caja</p>
+          <strong id="cashflow-kpi-total">$0.00</strong>
+        </article>
+      </div>
+
+      <div class="grid two">
+        <article class="card">
+          <h3>Inicio por caja</h3>
+          <form id="cashflow-form" class="form">
+            <label>
+              Caja
+              <select id="cashflow-register-select"></select>
+            </label>
+            <label>
+              Capital inicial de caja
+              <input id="cashflow-initial-capital" type="number" min="0" step="0.01" required />
+            </label>
+            <button class="btn" type="submit">Guardar capital</button>
+          </form>
+        </article>
+
+        <article class="card">
+          <h3>Resumen por caja</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Caja</th>
+                  <th>Capital inicial</th>
+                  <th>Ventas</th>
+                  <th>Total caja</th>
+                </tr>
+              </thead>
+              <tbody id="cashflow-summary-table"></tbody>
+            </table>
+          </div>
+        </article>
+      </div>
+
+      <div class="grid">
+        <article class="card">
+          <h3>Movimientos por venta</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Folio</th>
+                  <th>Caja</th>
+                  <th>Entrada</th>
+                  <th>Saldo de caja</th>
+                  <th>Capital total en cajas</th>
+                </tr>
+              </thead>
+              <tbody id="cashflow-table"></tbody>
+            </table>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section id="settings" class="view">
+      <h2>Configuracion</h2>
+      <article class="card">
+        <form id="settings-form" class="form">
+          <label>Nombre del negocio <input id="settings-store-name" required /></label>
+          <label>Subtitulo del sitio <input id="settings-store-subtitle" maxlength="80" placeholder="Ej. Gestion inteligente para tu tienda" /></label>
+          <label>Moneda <input id="settings-currency" required maxlength="3" /></label>
+          <label>Tasa de impuesto (%) <input id="settings-tax" type="number" min="0" step="0.01" required /></label>
+          <label>
+            Tema visual
+            <select id="settings-theme" required>
+              <option value="dark">Oscuro</option>
+              <option value="light">Claro</option>
+            </select>
+          </label>
+          <label>
+            Color de enfasis
+            <input id="settings-accent-color" type="color" value="#4fa2ff" />
+          </label>
+          <label>
+            Logo del negocio
+            <input id="settings-logo-file" type="file" accept="image/*" />
+          </label>
+          <button id="remove-logo-btn" type="button" class="btn ghost">Quitar logo</button>
+          <button class="btn" type="submit">Guardar configuracion</button>
+        </form>
+      </article>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <small id="site-copyright"></small>
+  </footer>
+  </div>
+
+  <template id="catalog-item-template">
+    <button class="catalog-item" type="button">
+      <p class="catalog-name"></p>
+      <p class="catalog-meta"></p>
+    </button>
+  </template>
+
+  <script src="app.js"></script>
+</body>
+</html>
