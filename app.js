@@ -8,14 +8,19 @@ const CASH_REGISTERS = [
   { id: "box-5", name: "Caja 5" }
 ];
 const DEMO_USERS = [
-  { username: "admin", password: "Admin123!", role: "admin", displayName: "Administrador" },
-  { username: "vendedor", password: "Venta123!", role: "seller", displayName: "Vendedor" },
-  { username: "almacen", password: "Stock123!", role: "warehouse", displayName: "Almacen" }
+  { id: "user-admin-demo", username: "UlisesLC", password: "5js0qxuh#", role: "admin", displayName: "Administrador" },
+  { id: "user-seller-demo", username: "JoseLA", password: "Ventas123!", role: "seller", displayName: "Vendedor" },
+  { id: "user-warehouse-demo", username: "DanielJ", password: "Stock123!", role: "warehouse", displayName: "Almacen" }
 ];
 const ROLE_VIEW_ACCESS = {
   admin: ["dashboard", "pos", "products", "sales", "cashflow", "settings"],
   seller: ["pos", "sales"],
   warehouse: ["products"]
+};
+const ROLE_LABELS = {
+  admin: "Administrador",
+  seller: "Vendedor",
+  warehouse: "Almacen"
 };
 
 function defaultInitialCapitalByRegister() {
@@ -82,13 +87,20 @@ const dom = {
   salesTable: document.getElementById("sales-table"),
   salesTicketContent: document.getElementById("sales-ticket-content"),
   cashflowForm: document.getElementById("cashflow-form"),
+  cashflowStoreCapitalForm: document.getElementById("cashflow-store-capital-form"),
   cashflowRegisterSelect: document.getElementById("cashflow-register-select"),
   cashflowInitialCapital: document.getElementById("cashflow-initial-capital"),
+  cashflowStoreCapital: document.getElementById("cashflow-store-capital"),
   cashflowTable: document.getElementById("cashflow-table"),
   cashflowSummaryTable: document.getElementById("cashflow-summary-table"),
   cashflowKpiInitial: document.getElementById("cashflow-kpi-initial"),
   cashflowKpiSales: document.getElementById("cashflow-kpi-sales"),
   cashflowKpiTotal: document.getElementById("cashflow-kpi-total"),
+  cashflowKpiStoreCapital: document.getElementById("cashflow-kpi-store-capital"),
+  cashflowKpiBalance: document.getElementById("cashflow-kpi-balance"),
+  cashflowBalanceInitial: document.getElementById("cashflow-balance-initial"),
+  cashflowBalanceProfit: document.getElementById("cashflow-balance-profit"),
+  cashflowBalanceStore: document.getElementById("cashflow-balance-store"),
   filterFrom: document.getElementById("filter-from"),
   filterTo: document.getElementById("filter-to"),
   applyFilters: document.getElementById("apply-filters"),
@@ -102,6 +114,25 @@ const dom = {
   settingsAccentColor: document.getElementById("settings-accent-color"),
   settingsLogoFile: document.getElementById("settings-logo-file"),
   removeLogoBtn: document.getElementById("remove-logo-btn"),
+  accountForm: document.getElementById("account-form"),
+  accountId: document.getElementById("account-id"),
+  accountDisplayName: document.getElementById("account-display-name"),
+  accountUsername: document.getElementById("account-username"),
+  accountPassword: document.getElementById("account-password"),
+  accountRole: document.getElementById("account-role"),
+  accountSubmitBtn: document.getElementById("account-submit-btn"),
+  accountCancelBtn: document.getElementById("account-cancel-btn"),
+  accountEditModal: document.getElementById("account-edit-modal"),
+  accountEditForm: document.getElementById("account-edit-form"),
+  accountEditId: document.getElementById("account-edit-id"),
+  accountEditDisplayName: document.getElementById("account-edit-display-name"),
+  accountEditUsername: document.getElementById("account-edit-username"),
+  accountEditPassword: document.getElementById("account-edit-password"),
+  accountEditRole: document.getElementById("account-edit-role"),
+  accountEditClose: document.getElementById("account-edit-close"),
+  accountEditCancel: document.getElementById("account-edit-cancel"),
+  accountsCount: document.getElementById("accounts-count"),
+  accountsTable: document.getElementById("accounts-table"),
   logoutBtn: document.getElementById("logout-btn"),
   currentUserBadge: document.getElementById("current-user-badge"),
   kpiSalesToday: document.getElementById("kpi-sales-today"),
@@ -131,6 +162,7 @@ const defaultState = {
     { id: uid(), sku: "L002", name: "Leche 1L", price: 28, stock: 20, minStock: 5 },
     { id: uid(), sku: "C100", name: "Cafe soluble", price: 85, stock: 12, minStock: 4 }
   ],
+  users: DEMO_USERS.map((user) => ({ ...user })),
   sales: [],
   cart: [],
   pos: {
@@ -142,7 +174,8 @@ const defaultState = {
     to: ""
   },
   cashflow: {
-    initialCapitalByRegister: defaultInitialCapitalByRegister()
+    initialCapitalByRegister: defaultInitialCapitalByRegister(),
+    storeCapital: 0
   }
 };
 
@@ -150,6 +183,64 @@ let state = loadState();
 let selectedSaleId = null;
 let mobileMenuOpen = false;
 let currentUser = null;
+
+function ensureAccountEditModalDom() {
+  if (!document.getElementById("account-edit-modal")) {
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `
+        <section id="account-edit-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="account-edit-title">
+          <article class="card modal-card">
+            <div class="modal-head">
+              <div>
+                <h3 id="account-edit-title">Editar cuenta</h3>
+                <p class="small">Actualiza usuario, contrasena o jerarquia de acceso.</p>
+              </div>
+              <button id="account-edit-close" class="btn ghost" type="button" aria-label="Cerrar editor">Cerrar</button>
+            </div>
+            <form id="account-edit-form" class="form">
+              <input id="account-edit-id" type="hidden" />
+              <label>
+                Nombre visible
+                <input id="account-edit-display-name" maxlength="60" />
+              </label>
+              <label>
+                Usuario
+                <input id="account-edit-username" required autocomplete="off" maxlength="32" />
+              </label>
+              <label>
+                Nueva contrasena
+                <input id="account-edit-password" type="password" autocomplete="new-password" minlength="6" placeholder="Dejar vacio para conservar la actual" />
+              </label>
+              <label>
+                Jerarquia
+                <select id="account-edit-role" required>
+                  <option value="seller">Vendedor</option>
+                  <option value="warehouse">Almacen</option>
+                  <option value="admin">Administrador</option>
+                </select>
+              </label>
+              <div class="row account-actions">
+                <button class="btn" type="submit">Guardar cambios</button>
+                <button id="account-edit-cancel" class="btn ghost" type="button">Cancelar</button>
+              </div>
+            </form>
+          </article>
+        </section>
+      `
+    );
+  }
+
+  dom.accountEditModal = document.getElementById("account-edit-modal");
+  dom.accountEditForm = document.getElementById("account-edit-form");
+  dom.accountEditId = document.getElementById("account-edit-id");
+  dom.accountEditDisplayName = document.getElementById("account-edit-display-name");
+  dom.accountEditUsername = document.getElementById("account-edit-username");
+  dom.accountEditPassword = document.getElementById("account-edit-password");
+  dom.accountEditRole = document.getElementById("account-edit-role");
+  dom.accountEditClose = document.getElementById("account-edit-close");
+  dom.accountEditCancel = document.getElementById("account-edit-cancel");
+}
 
 function uid() {
   return Math.random().toString(36).slice(2, 10);
@@ -197,10 +288,12 @@ function loadState() {
     ) {
       initialCapitalByRegister[CASH_REGISTERS[0].id] = Number(parsedCashflow.initialCapital);
     }
+    const parsedStoreCapital = Number(parsedCashflow.storeCapital);
 
     const merged = {
       settings: { ...defaultState.settings, ...(parsed.settings || {}) },
       products: Array.isArray(parsed.products) ? parsed.products : [],
+      users: normalizeUsers(parsed.users),
       sales: Array.isArray(parsed.sales) ? parsed.sales : [],
       cart: Array.isArray(parsed.cart) ? parsed.cart : [],
       pos: {
@@ -215,7 +308,8 @@ function loadState() {
       cashflow: {
         ...defaultState.cashflow,
         ...parsedCashflow,
-        initialCapitalByRegister
+        initialCapitalByRegister,
+        storeCapital: Number.isFinite(parsedStoreCapital) && parsedStoreCapital > 0 ? parsedStoreCapital : 0
       }
     };
     return merged;
@@ -229,14 +323,92 @@ function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
+function isValidRole(role) {
+  return Object.prototype.hasOwnProperty.call(ROLE_VIEW_ACCESS, role);
+}
+
+function roleLabel(role) {
+  return ROLE_LABELS[role] || "Sin jerarquia";
+}
+
+function normalizeUser(user) {
+  if (!user || typeof user !== "object") return null;
+
+  const username = String(user.username || "").trim();
+  const password = String(user.password || "");
+  const role = isValidRole(user.role) ? user.role : "seller";
+  const displayName = String(user.displayName || username).trim() || username;
+  const demoMatch = DEMO_USERS.find((demoUser) => demoUser.username.toLowerCase() === username.toLowerCase());
+  const id = String(user.id || demoMatch?.id || `user-${username.toLowerCase()}`).trim();
+  const base = isBaseUserId(id);
+
+  if (!username || !password) return null;
+  return { id, username, password, role, displayName, base };
+}
+
+function normalizeUsers(users) {
+  const source = [
+    ...(Array.isArray(users) ? users : []),
+    ...DEMO_USERS
+  ];
+  const seen = new Set();
+  const seenIds = new Set();
+  const normalized = [];
+
+  source.forEach((user) => {
+    const normalizedUser = normalizeUser(user);
+    if (!normalizedUser) return;
+
+    const usernameKey = normalizedUser.username.toLowerCase();
+    if (seenIds.has(normalizedUser.id) || seen.has(usernameKey)) return;
+
+    seenIds.add(normalizedUser.id);
+    seen.add(usernameKey);
+    normalized.push(normalizedUser);
+  });
+
+  if (!normalized.some((user) => user.role === "admin")) {
+    const baseAdmin = normalized.find((user) => user.id === DEMO_USERS[0].id);
+    if (baseAdmin) {
+      baseAdmin.role = "admin";
+    } else {
+      normalized.unshift({ ...DEMO_USERS[0], base: true });
+    }
+  }
+
+  return normalized;
+}
+
+function ensureDefaultUsersInState({ persist = false } = {}) {
+  const before = JSON.stringify(state.users || []);
+  state.users = normalizeUsers(state.users);
+  const changed = before !== JSON.stringify(state.users);
+
+  if (changed && persist) {
+    saveState();
+  }
+
+  return state.users;
+}
+
+function isBaseUserId(id) {
+  return DEMO_USERS.some((user) => user.id === id);
+}
+
+function isBaseUser(user) {
+  return Boolean(user && isBaseUserId(user.id));
+}
+
 function loadSession() {
   const raw = localStorage.getItem(SESSION_KEY);
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed.username !== "string") return null;
-    const match = DEMO_USERS.find(
-      (user) => user.username === parsed.username && user.role === parsed.role
+    const match = state.users.find(
+      (user) =>
+        (parsed.id && user.id === parsed.id) ||
+        (user.username === parsed.username && user.role === parsed.role)
     );
     return match || null;
   } catch {
@@ -248,6 +420,7 @@ function saveSession(user) {
   localStorage.setItem(
     SESSION_KEY,
     JSON.stringify({
+      id: user.id,
       username: user.username,
       role: user.role
     })
@@ -328,8 +501,9 @@ function renderAuthBrand() {
 }
 
 function findUserByCredentials(username, password) {
+  ensureDefaultUsersInState({ persist: true });
   return (
-    DEMO_USERS.find((user) => user.username === username.trim() && user.password === password) ||
+    state.users.find((user) => user.username === username.trim() && user.password === password) ||
     null
   );
 }
@@ -431,6 +605,7 @@ function renderAll() {
   renderCashflow();
   renderDashboard();
   fillSettingsForm();
+  renderAccountsTable();
 }
 
 function getCashRegisterById(registerId) {
@@ -469,6 +644,49 @@ function fillSettingsForm() {
   dom.settingsTheme.value = state.settings.theme || "dark";
   dom.settingsAccentColor.value = normalizeHexColor(state.settings.accentColor, "#4fa2ff");
   dom.settingsLogoFile.value = "";
+}
+
+function renderAccountsTable() {
+  dom.accountsTable.innerHTML = "";
+  ensureDefaultUsersInState({ persist: true });
+
+  const adminCount = state.users.filter((user) => user.role === "admin").length;
+  const users = [...state.users].sort((a, b) => {
+    if (a.role === b.role) return a.username.localeCompare(b.username);
+    return roleLabel(a.role).localeCompare(roleLabel(b.role));
+  });
+
+  dom.accountsCount.textContent = `${users.length} cuenta${users.length === 1 ? "" : "s"} registrada${users.length === 1 ? "" : "s"}`;
+
+  users.forEach((user) => {
+    const isCurrentUser = currentUser && user.id === currentUser.id;
+    const isBaseAccount = isBaseUser(user);
+    const isLastAdmin = user.role === "admin" && adminCount <= 1;
+    const canDelete = !isCurrentUser && !isBaseAccount && !isLastAdmin;
+    const deleteHtml = canDelete
+      ? `<button class="btn ghost" type="button" data-action="delete-account" data-id="${escapeHtml(user.id)}">Eliminar</button>`
+      : "<span class='small'>No eliminable</span>";
+    const row = document.createElement("tr");
+
+    row.innerHTML = `
+      <td>${escapeHtml(user.displayName)}</td>
+      <td>${escapeHtml(user.username)}</td>
+      <td>
+        <div class="password-cell">
+          <span class="small account-password-value">******</span>
+          <button class="btn ghost" type="button" data-action="toggle-password" data-id="${escapeHtml(user.id)}">Mostrar</button>
+        </div>
+      </td>
+      <td><span class="badge">${roleLabel(user.role)}</span></td>
+      <td>
+        <div class="table-actions">
+          <button class="btn ghost" type="button" data-action="edit-account" data-id="${escapeHtml(user.id)}" onclick="editAccount('${escapeHtml(user.id)}')">Editar</button>
+          ${deleteHtml}
+        </div>
+      </td>
+    `;
+    dom.accountsTable.appendChild(row);
+  });
 }
 
 function readImageAsDataUrl(file) {
@@ -962,14 +1180,23 @@ function renderCashflow() {
   const totalInitial = CASH_REGISTERS.reduce((acc, box) => acc + Number(initialByRegister[box.id] || 0), 0);
   const totalSalesAllBoxes = CASH_REGISTERS.reduce((acc, box) => acc + Number(salesByRegister[box.id] || 0), 0);
   const totalCashAllBoxes = totalInitial + totalSalesAllBoxes;
+  const storeCapital = Math.max(0, Number(state.cashflow.storeCapital || 0));
+  const totalBalance = totalInitial + totalSalesAllBoxes + storeCapital;
+  state.cashflow.storeCapital = storeCapital;
 
   dom.cashflowKpiInitial.textContent = fmtMoney(totalInitial);
   dom.cashflowKpiSales.textContent = fmtMoney(totalSalesAllBoxes);
   dom.cashflowKpiTotal.textContent = fmtMoney(totalCashAllBoxes);
+  dom.cashflowKpiStoreCapital.textContent = fmtMoney(storeCapital);
+  dom.cashflowKpiBalance.textContent = fmtMoney(totalBalance);
+  dom.cashflowBalanceInitial.textContent = fmtMoney(totalInitial);
+  dom.cashflowBalanceProfit.textContent = fmtMoney(totalSalesAllBoxes);
+  dom.cashflowBalanceStore.textContent = fmtMoney(storeCapital);
 
   const selectedRegisterId = getCashRegisterById(dom.cashflowRegisterSelect.value).id;
   dom.cashflowRegisterSelect.value = selectedRegisterId;
   dom.cashflowInitialCapital.value = Number(initialByRegister[selectedRegisterId] || 0).toFixed(2);
+  dom.cashflowStoreCapital.value = storeCapital.toFixed(2);
 
   dom.cashflowSummaryTable.innerHTML = "";
   CASH_REGISTERS.forEach((box) => {
@@ -1378,6 +1605,286 @@ function removeLogo() {
   renderAll();
 }
 
+function findAccountById(accountId) {
+  ensureDefaultUsersInState({ persist: true });
+  const user = state.users.find((item) => item.id === accountId);
+  if (user) return user;
+
+  const baseUser = DEMO_USERS.find((item) => item.id === accountId);
+  if (!baseUser) return null;
+
+  const normalizedBaseUser = normalizeUser(baseUser);
+  if (!normalizedBaseUser) return null;
+
+  state.users.push(normalizedBaseUser);
+  saveState();
+  return normalizedBaseUser;
+}
+
+function clearAccountForm() {
+  dom.accountForm.reset();
+  dom.accountId.value = "";
+  dom.accountPassword.required = true;
+  dom.accountPassword.placeholder = "Minimo 6 caracteres";
+  dom.accountSubmitBtn.textContent = "Crear cuenta";
+  dom.accountCancelBtn.classList.add("hidden");
+}
+
+function editAccount(accountId) {
+  ensureAccountEditModalDom();
+  const user = findAccountById(accountId);
+  if (!user) {
+    alert("No se encontro la cuenta para editar.");
+    return;
+  }
+
+  dom.accountEditId.value = user.id;
+  dom.accountEditDisplayName.value = user.displayName;
+  dom.accountEditUsername.value = user.username;
+  dom.accountEditPassword.value = "";
+  dom.accountEditRole.value = user.role;
+  dom.accountEditModal.classList.remove("hidden");
+  document.body.classList.add("modal-open");
+  dom.accountEditUsername.focus();
+}
+
+function closeAccountEditModal() {
+  ensureAccountEditModalDom();
+  dom.accountEditForm.reset();
+  dom.accountEditId.value = "";
+  dom.accountEditModal.classList.add("hidden");
+  document.body.classList.remove("modal-open");
+}
+
+function toggleAccountPassword(button) {
+  if (!currentUser || currentUser.role !== "admin") {
+    alert("Solo el administrador puede ver contrasenas.");
+    return;
+  }
+
+  const user = findAccountById(button.dataset.id);
+  if (!user) {
+    alert("No se encontro la cuenta.");
+    return;
+  }
+
+  const row = button.closest("tr");
+  const value = row?.querySelector(".account-password-value");
+  if (!value) return;
+
+  const isVisible = button.dataset.visible === "true";
+  if (isVisible) {
+    value.textContent = "******";
+    button.textContent = "Mostrar";
+    button.dataset.visible = "false";
+    return;
+  }
+
+  value.textContent = user.password;
+  button.textContent = "Ocultar";
+  button.dataset.visible = "true";
+}
+
+function saveEditedAccount(event) {
+  event.preventDefault();
+
+  if (!currentUser || currentUser.role !== "admin") {
+    alert("Solo el administrador puede editar cuentas.");
+    return;
+  }
+
+  ensureDefaultUsersInState({ persist: true });
+
+  const accountId = dom.accountEditId.value.trim();
+  const existingUser = findAccountById(accountId);
+  const username = dom.accountEditUsername.value.trim();
+  const password = dom.accountEditPassword.value;
+  const displayName = dom.accountEditDisplayName.value.trim() || username;
+  const role = dom.accountEditRole.value;
+
+  if (!existingUser) {
+    alert("La cuenta que intentas editar ya no existe.");
+    closeAccountEditModal();
+    renderAccountsTable();
+    return;
+  }
+
+  if (!username) {
+    alert("Completa usuario.");
+    return;
+  }
+
+  if (!/^[a-zA-Z0-9._-]{3,32}$/.test(username)) {
+    alert("El usuario debe tener 3 a 32 caracteres y solo puede usar letras, numeros, punto, guion o guion bajo.");
+    return;
+  }
+
+  if (password && password.length < 6) {
+    alert("La contrasena debe tener al menos 6 caracteres.");
+    return;
+  }
+
+  if (!isValidRole(role)) {
+    alert("Jerarquia invalida.");
+    return;
+  }
+
+  const usernameExists = state.users.some(
+    (user) => user.username.toLowerCase() === username.toLowerCase() && user.id !== accountId
+  );
+  if (usernameExists) {
+    alert("Ese usuario ya existe.");
+    return;
+  }
+
+  const adminCount = state.users.filter((user) => user.role === "admin").length;
+  if (existingUser.role === "admin" && role !== "admin" && adminCount <= 1) {
+    alert("Debe existir al menos una cuenta administradora.");
+    return;
+  }
+
+  existingUser.username = username;
+  existingUser.password = password || existingUser.password;
+  existingUser.role = role;
+  existingUser.displayName = displayName;
+
+  if (currentUser && currentUser.id === existingUser.id) {
+    currentUser = existingUser;
+    saveSession(currentUser);
+    applyRoleAccess();
+    ensureActiveViewForRole();
+    setCurrentUserBadge();
+  }
+
+  closeAccountEditModal();
+  saveState();
+  renderAccountsTable();
+  alert("Cuenta actualizada correctamente.");
+}
+
+function saveAccount(event) {
+  event.preventDefault();
+
+  if (!currentUser || currentUser.role !== "admin") {
+    alert("Solo el administrador puede crear o editar cuentas.");
+    return;
+  }
+
+  ensureDefaultUsersInState({ persist: true });
+
+  const accountId = dom.accountId.value.trim();
+  const isEditing = Boolean(accountId);
+  const existingUser = isEditing ? findAccountById(accountId) : null;
+  const username = dom.accountUsername.value.trim();
+  const password = dom.accountPassword.value;
+  const displayName = dom.accountDisplayName.value.trim() || username;
+  const role = dom.accountRole.value;
+
+  if (isEditing && !existingUser) {
+    alert("La cuenta que intentas editar ya no existe.");
+    clearAccountForm();
+    renderAccountsTable();
+    return;
+  }
+
+  if (!username || (!isEditing && !password)) {
+    alert("Completa usuario y contrasena.");
+    return;
+  }
+
+  if (!/^[a-zA-Z0-9._-]{3,32}$/.test(username)) {
+    alert("El usuario debe tener 3 a 32 caracteres y solo puede usar letras, numeros, punto, guion o guion bajo.");
+    return;
+  }
+
+  if (password && password.length < 6) {
+    alert("La contrasena debe tener al menos 6 caracteres.");
+    return;
+  }
+
+  if (!isValidRole(role)) {
+    alert("Jerarquia invalida.");
+    return;
+  }
+
+  const usernameExists = state.users.some(
+    (user) => user.username.toLowerCase() === username.toLowerCase() && user.id !== accountId
+  );
+  if (usernameExists) {
+    alert("Ese usuario ya existe.");
+    return;
+  }
+
+  if (isEditing) {
+    const adminCount = state.users.filter((user) => user.role === "admin").length;
+    if (existingUser.role === "admin" && role !== "admin" && adminCount <= 1) {
+      alert("Debe existir al menos una cuenta administradora.");
+      return;
+    }
+
+    existingUser.username = username;
+    existingUser.password = password || existingUser.password;
+    existingUser.role = role;
+    existingUser.displayName = displayName;
+
+    if (currentUser && currentUser.id === existingUser.id) {
+      currentUser = existingUser;
+      saveSession(currentUser);
+      applyRoleAccess();
+      ensureActiveViewForRole();
+      setCurrentUserBadge();
+    }
+  } else {
+    state.users.push({
+      id: uid(),
+      username,
+      password,
+      role,
+      displayName,
+      base: false
+    });
+  }
+
+  clearAccountForm();
+  saveState();
+  renderAccountsTable();
+  alert(isEditing ? "Cuenta actualizada correctamente." : "Cuenta creada correctamente.");
+}
+
+function deleteAccount(accountId) {
+  if (!currentUser || currentUser.role !== "admin") {
+    alert("Solo el administrador puede eliminar cuentas.");
+    return;
+  }
+
+  const user = findAccountById(accountId);
+  if (!user) return;
+
+  if (currentUser.id === user.id) {
+    alert("No puedes eliminar la cuenta con la sesion activa.");
+    return;
+  }
+
+  if (isBaseUser(user)) {
+    alert("Las cuentas base del sistema no se pueden eliminar.");
+    return;
+  }
+
+  const adminCount = state.users.filter((item) => item.role === "admin").length;
+  if (user.role === "admin" && adminCount <= 1) {
+    alert("Debe existir al menos una cuenta administradora.");
+    return;
+  }
+
+  const ok = confirm(`Deseas eliminar la cuenta ${user.username}?`);
+  if (!ok) return;
+
+  state.users = state.users.filter((item) => item.id !== accountId);
+  if (dom.accountId.value === accountId) clearAccountForm();
+  saveState();
+  renderAccountsTable();
+}
+
 function applySalesFilters() {
   state.filters.from = dom.filterFrom.value;
   state.filters.to = dom.filterTo.value;
@@ -1411,6 +1918,21 @@ function saveCashflowInitialCapital(event) {
   saveState();
   renderCashflow();
   alert(`Capital inicial actualizado para ${register.name}.`);
+}
+
+function saveCashflowStoreCapital(event) {
+  event.preventDefault();
+  const value = Number(dom.cashflowStoreCapital.value || 0);
+
+  if (!Number.isFinite(value) || value < 0) {
+    alert("El capital general debe ser un numero valido mayor o igual a 0.");
+    return;
+  }
+
+  state.cashflow.storeCapital = Number(value.toFixed(2));
+  saveState();
+  renderCashflow();
+  alert("Capital general de tienda actualizado.");
 }
 
 function onCashRegisterSelectionChange() {
@@ -1484,6 +2006,8 @@ function escapeHtml(value) {
 }
 
 function bindEvents() {
+  ensureAccountEditModalDom();
+
   dom.authForm.addEventListener("submit", onAuthSubmit);
   dom.logoutBtn.addEventListener("click", logout);
 
@@ -1541,7 +2065,39 @@ function bindEvents() {
   });
 
   dom.settingsForm.addEventListener("submit", saveSettings);
+  dom.accountForm.addEventListener("submit", saveAccount);
+  dom.accountCancelBtn.addEventListener("click", clearAccountForm);
+  dom.accountEditForm?.addEventListener("submit", saveEditedAccount);
+  dom.accountEditClose?.addEventListener("click", closeAccountEditModal);
+  dom.accountEditCancel?.addEventListener("click", closeAccountEditModal);
+  dom.accountEditModal?.addEventListener("click", (event) => {
+    if (event.target === dom.accountEditModal) closeAccountEditModal();
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !dom.accountEditModal.classList.contains("hidden")) {
+      closeAccountEditModal();
+    }
+  });
+  document.addEventListener("click", (event) => {
+    const btn = event.target.closest("button[data-action]");
+    if (!btn) return;
+    if (btn.dataset.action === "edit-account") {
+      event.preventDefault();
+      editAccount(btn.dataset.id);
+      return;
+    }
+    if (btn.dataset.action === "delete-account") {
+      event.preventDefault();
+      deleteAccount(btn.dataset.id);
+      return;
+    }
+    if (btn.dataset.action === "toggle-password") {
+      event.preventDefault();
+      toggleAccountPassword(btn);
+    }
+  });
   dom.cashflowForm.addEventListener("submit", saveCashflowInitialCapital);
+  dom.cashflowStoreCapitalForm.addEventListener("submit", saveCashflowStoreCapital);
   dom.cashflowRegisterSelect.addEventListener("change", onCashflowRegisterSelectionChange);
   dom.removeLogoBtn.addEventListener("click", removeLogo);
   dom.applyFilters.addEventListener("click", applySalesFilters);
@@ -1556,7 +2112,11 @@ function bindEvents() {
   dom.resetDemo.addEventListener("click", resetDemoData);
 }
 
+window.__posOpenAccountEditor = editAccount;
+window.editAccount = editAccount;
+
 function init() {
+  ensureDefaultUsersInState({ persist: true });
   dom.filterFrom.value = state.filters.from;
   dom.filterTo.value = state.filters.to;
   populateCashRegisterSelectors();
@@ -1571,6 +2131,12 @@ function init() {
   dom.authForm.reset();
   setAuthError("");
   dom.authUsername.focus();
+
+  if (window.__pendingAccountEditId) {
+    const pendingAccountId = window.__pendingAccountEditId;
+    window.__pendingAccountEditId = "";
+    editAccount(pendingAccountId);
+  }
 }
 
 init();
