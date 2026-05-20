@@ -7,20 +7,33 @@ const CASH_REGISTERS = [
   { id: "box-4", name: "Caja 4" },
   { id: "box-5", name: "Caja 5" }
 ];
+const SUPPLIERS = [
+  { id: "coca-cola", name: "Coca-Cola", category: "Bebidas" },
+  { id: "barcel", name: "Barcel", category: "Botanas" },
+  { id: "sabritas", name: "Sabritas", category: "Botanas" },
+  { id: "bimbo", name: "Bimbo", category: "Panificacion" },
+  { id: "lala", name: "Lala", category: "Lacteos" }
+];
 const DEMO_USERS = [
   { id: "user-admin-demo", username: "UlisesLC", password: "5js0qxuh#", role: "admin", displayName: "Administrador" },
   { id: "user-seller-demo", username: "JoseLA", password: "Ventas123!", role: "seller", displayName: "Vendedor" },
-  { id: "user-warehouse-demo", username: "DanielJ", password: "Stock123!", role: "warehouse", displayName: "Almacen" }
+  { id: "user-warehouse-demo", username: "DanielJ", password: "Stock123!", role: "warehouse", displayName: "Almacen" },
+  { id: "user-purchases-demo", username: "ComprasTP", password: "Compras123!", role: "purchases", displayName: "Compras" },
+  { id: "user-accounting-demo", username: "ContabilidadTP", password: "Conta123!", role: "accounting", displayName: "Contabilidad" }
 ];
 const ROLE_VIEW_ACCESS = {
-  admin: ["dashboard", "pos", "products", "sales", "cashflow", "settings"],
+  admin: ["dashboard", "pos", "products", "sales", "cashflow", "orders", "settings"],
   seller: ["pos", "sales"],
-  warehouse: ["products"]
+  warehouse: ["products"],
+  purchases: ["orders"],
+  accounting: ["cashflow"]
 };
 const ROLE_LABELS = {
   admin: "Administrador",
   seller: "Vendedor",
-  warehouse: "Almacen"
+  warehouse: "Almacen",
+  purchases: "Compras",
+  accounting: "Contabilidad"
 };
 
 function defaultInitialCapitalByRegister() {
@@ -101,6 +114,33 @@ const dom = {
   cashflowBalanceInitial: document.getElementById("cashflow-balance-initial"),
   cashflowBalanceProfit: document.getElementById("cashflow-balance-profit"),
   cashflowBalanceStore: document.getElementById("cashflow-balance-store"),
+  ordersHistoryToggle: document.getElementById("orders-history-toggle"),
+  ordersHistoryPanel: document.getElementById("orders-history-panel"),
+  ordersHistorySummary: document.getElementById("orders-history-summary"),
+  ordersHistoryMonth: document.getElementById("orders-history-month"),
+  ordersHistoryList: document.getElementById("orders-history-list"),
+  providersGrid: document.getElementById("providers-grid"),
+  supplierOrderPanel: document.getElementById("supplier-order-panel"),
+  supplierOrderTitle: document.getElementById("supplier-order-title"),
+  supplierOrderSubtitle: document.getElementById("supplier-order-subtitle"),
+  supplierOrderClose: document.getElementById("supplier-order-close"),
+  supplierOrderForm: document.getElementById("supplier-order-form"),
+  supplierOrderProviderId: document.getElementById("supplier-order-provider-id"),
+  supplierOrderProductName: document.getElementById("supplier-order-product-name"),
+  supplierOrderSku: document.getElementById("supplier-order-sku"),
+  supplierOrderQuantity: document.getElementById("supplier-order-quantity"),
+  supplierOrderUnitCost: document.getElementById("supplier-order-unit-cost"),
+  supplierOrderLocation: document.getElementById("supplier-order-location"),
+  supplierOrderTotal: document.getElementById("supplier-order-total"),
+  openOrdersCount: document.getElementById("open-orders-count"),
+  openOrdersList: document.getElementById("open-orders-list"),
+  orderChecklistPanel: document.getElementById("order-checklist-panel"),
+  orderChecklistTitle: document.getElementById("order-checklist-title"),
+  orderChecklistDetails: document.getElementById("order-checklist-details"),
+  orderChecklistTotal: document.getElementById("order-checklist-total"),
+  orderCheckReceived: document.getElementById("order-check-received"),
+  orderCheckPaid: document.getElementById("order-check-paid"),
+  orderCheckComplete: document.getElementById("order-check-complete"),
   filterFrom: document.getElementById("filter-from"),
   filterTo: document.getElementById("filter-to"),
   applyFilters: document.getElementById("apply-filters"),
@@ -176,6 +216,10 @@ const defaultState = {
   cashflow: {
     initialCapitalByRegister: defaultInitialCapitalByRegister(),
     storeCapital: 0
+  },
+  orders: {
+    open: [],
+    completed: []
   }
 };
 
@@ -183,6 +227,10 @@ let state = loadState();
 let selectedSaleId = null;
 let mobileMenuOpen = false;
 let currentUser = null;
+let selectedSupplierId = "";
+let selectedOrderId = null;
+let ordersHistoryVisible = false;
+let selectedOrdersHistoryMonth = "";
 
 function ensureAccountEditModalDom() {
   if (!document.getElementById("account-edit-modal")) {
@@ -217,6 +265,8 @@ function ensureAccountEditModalDom() {
                 <select id="account-edit-role" required>
                   <option value="seller">Vendedor</option>
                   <option value="warehouse">Almacen</option>
+                  <option value="purchases">Compras</option>
+                  <option value="accounting">Contabilidad</option>
                   <option value="admin">Administrador</option>
                 </select>
               </label>
@@ -310,13 +360,55 @@ function loadState() {
         ...parsedCashflow,
         initialCapitalByRegister,
         storeCapital: Number.isFinite(parsedStoreCapital) && parsedStoreCapital > 0 ? parsedStoreCapital : 0
-      }
+      },
+      orders: normalizeOrders(parsed.orders)
     };
     return merged;
   } catch (err) {
     console.warn("No se pudo cargar el estado.", err);
     return deepClone(defaultState);
   }
+}
+
+function normalizeOrder(order, fallbackStatus) {
+  if (!order || typeof order !== "object") return null;
+
+  const supplier = getSupplierById(order.supplierId);
+  const quantity = Math.max(1, Math.floor(Number(order.quantity || 1)));
+  const unitCost = Math.max(0, Number(order.unitCost || 0));
+  const total = Number.isFinite(Number(order.total)) ? Number(order.total) : quantity * unitCost;
+  const checks = {
+    received: Boolean(order.checks?.received),
+    paid: Boolean(order.checks?.paid),
+    complete: Boolean(order.checks?.complete)
+  };
+
+  return {
+    id: String(order.id || uid()),
+    supplierId: supplier.id,
+    supplierName: supplier.name,
+    productName: String(order.productName || "").trim() || "Producto sin nombre",
+    sku: String(order.sku || "").trim() || "SIN-SKU",
+    quantity,
+    unitCost,
+    location: String(order.location || "").trim() || "Sin ubicacion",
+    total: Number(total.toFixed(2)),
+    checks,
+    createdAt: order.createdAt || nowIso(),
+    completedAt: order.completedAt || (fallbackStatus === "completed" ? nowIso() : "")
+  };
+}
+
+function normalizeOrders(orders) {
+  const source = orders && typeof orders === "object" ? orders : {};
+  return {
+    open: (Array.isArray(source.open) ? source.open : [])
+      .map((order) => normalizeOrder(order, "open"))
+      .filter(Boolean),
+    completed: (Array.isArray(source.completed) ? source.completed : [])
+      .map((order) => normalizeOrder(order, "completed"))
+      .filter(Boolean)
+  };
 }
 
 function saveState() {
@@ -603,6 +695,7 @@ function renderAll() {
   renderCart();
   renderSalesTable();
   renderCashflow();
+  renderOrdersControl();
   renderDashboard();
   fillSettingsForm();
   renderAccountsTable();
@@ -1236,6 +1329,294 @@ function renderCashflow() {
       <td>${fmtMoney(runningGlobal)}</td>
     `;
     dom.cashflowTable.appendChild(row);
+  });
+}
+
+function ensureOrdersState() {
+  state.orders = normalizeOrders(state.orders);
+  return state.orders;
+}
+
+function getSupplierById(supplierId) {
+  return SUPPLIERS.find((supplier) => supplier.id === supplierId) || SUPPLIERS[0];
+}
+
+function supplierInitials(name) {
+  return String(name || "")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() || "")
+    .join("") || "P";
+}
+
+function renderOrdersControl() {
+  ensureOrdersState();
+  renderProvidersGrid();
+  renderSupplierOrderPanel();
+  renderOpenOrdersList();
+  renderOrderChecklist();
+  renderOrdersHistory();
+}
+
+function renderProvidersGrid() {
+  dom.providersGrid.innerHTML = "";
+
+  SUPPLIERS.forEach((supplier) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `provider-tile${supplier.id === selectedSupplierId ? " active" : ""}`;
+    button.dataset.supplierId = supplier.id;
+    button.innerHTML = `
+      <span class="provider-mark">${escapeHtml(supplierInitials(supplier.name))}</span>
+      <span>
+        <span class="provider-name">${escapeHtml(supplier.name)}</span>
+        <span class="small">${escapeHtml(supplier.category)}</span>
+      </span>
+    `;
+    dom.providersGrid.appendChild(button);
+  });
+}
+
+function openSupplierOrderPanel(supplierId) {
+  selectedSupplierId = getSupplierById(supplierId).id;
+  dom.supplierOrderForm.reset();
+  renderOrdersControl();
+  dom.supplierOrderProductName.focus();
+}
+
+function closeSupplierOrderPanel() {
+  selectedSupplierId = "";
+  dom.supplierOrderForm.reset();
+  updateSupplierOrderTotal();
+  renderOrdersControl();
+}
+
+function renderSupplierOrderPanel() {
+  if (!selectedSupplierId) {
+    dom.supplierOrderPanel.classList.add("hidden");
+    return;
+  }
+
+  const supplier = getSupplierById(selectedSupplierId);
+  dom.supplierOrderProviderId.value = supplier.id;
+  dom.supplierOrderTitle.textContent = `Pedido a ${supplier.name}`;
+  dom.supplierOrderSubtitle.textContent = supplier.category;
+  dom.supplierOrderPanel.classList.remove("hidden");
+  updateSupplierOrderTotal();
+}
+
+function supplierOrderTotalValue() {
+  const quantity = Math.max(0, Number(dom.supplierOrderQuantity.value || 0));
+  const unitCost = Math.max(0, Number(dom.supplierOrderUnitCost.value || 0));
+  return quantity * unitCost;
+}
+
+function updateSupplierOrderTotal() {
+  if (!dom.supplierOrderTotal) return;
+  dom.supplierOrderTotal.textContent = fmtMoney(supplierOrderTotalValue());
+}
+
+function saveSupplierOrder(event) {
+  event.preventDefault();
+
+  const supplier = getSupplierById(dom.supplierOrderProviderId.value || selectedSupplierId);
+  const productName = dom.supplierOrderProductName.value.trim();
+  const sku = dom.supplierOrderSku.value.trim();
+  const quantity = Math.floor(Number(dom.supplierOrderQuantity.value || 0));
+  const unitCost = Number(dom.supplierOrderUnitCost.value || 0);
+  const location = dom.supplierOrderLocation.value.trim();
+
+  if (!productName || !sku || !location) {
+    alert("Completa producto, SKU y ubicacion.");
+    return;
+  }
+
+  if (!Number.isFinite(quantity) || quantity <= 0) {
+    alert("La cantidad debe ser mayor a 0.");
+    return;
+  }
+
+  if (!Number.isFinite(unitCost) || unitCost < 0) {
+    alert("El costo unitario debe ser un numero valido mayor o igual a 0.");
+    return;
+  }
+
+  const total = quantity * unitCost;
+  const order = {
+    id: uid(),
+    supplierId: supplier.id,
+    supplierName: supplier.name,
+    productName,
+    sku,
+    quantity,
+    unitCost: Number(unitCost.toFixed(2)),
+    location,
+    total: Number(total.toFixed(2)),
+    checks: {
+      received: false,
+      paid: false,
+      complete: false
+    },
+    createdAt: nowIso(),
+    completedAt: ""
+  };
+
+  ensureOrdersState();
+  state.orders.open.unshift(order);
+  selectedOrderId = order.id;
+  dom.supplierOrderForm.reset();
+  saveState();
+  renderOrdersControl();
+}
+
+function renderOpenOrdersList() {
+  ensureOrdersState();
+  const openOrders = state.orders.open;
+  dom.openOrdersCount.textContent = `${openOrders.length} abierto${openOrders.length === 1 ? "" : "s"}`;
+  dom.openOrdersList.innerHTML = "";
+
+  if (!openOrders.length) {
+    selectedOrderId = null;
+    dom.openOrdersList.innerHTML = "<li class='small'>Sin pedidos abiertos.</li>";
+    return;
+  }
+
+  if (!openOrders.some((order) => order.id === selectedOrderId)) {
+    selectedOrderId = null;
+  }
+
+  openOrders.forEach((order) => {
+    const li = document.createElement("li");
+    li.innerHTML = `
+      <button class="open-order-button${order.id === selectedOrderId ? " active" : ""}" type="button" data-order-id="${escapeHtml(order.id)}">
+        <span class="open-order-top">
+          <strong>${escapeHtml(order.supplierName)}</strong>
+          <span>${fmtMoney(order.total)}</span>
+        </span>
+        <span class="open-order-detail">
+          ${escapeHtml(order.quantity)} x ${escapeHtml(order.productName)} | SKU ${escapeHtml(order.sku)} | ${escapeHtml(order.location)}
+        </span>
+      </button>
+    `;
+    dom.openOrdersList.appendChild(li);
+  });
+}
+
+function renderOrderChecklist() {
+  const order = state.orders.open.find((item) => item.id === selectedOrderId);
+
+  if (!order) {
+    dom.orderChecklistPanel.classList.add("hidden");
+    dom.orderCheckReceived.checked = false;
+    dom.orderCheckPaid.checked = false;
+    dom.orderCheckComplete.checked = false;
+    return;
+  }
+
+  dom.orderChecklistTitle.textContent = order.supplierName;
+  dom.orderChecklistDetails.textContent = `${order.quantity} x ${order.productName} | SKU ${order.sku} | ${order.location}`;
+  dom.orderChecklistTotal.textContent = fmtMoney(order.total);
+  dom.orderCheckReceived.checked = Boolean(order.checks.received);
+  dom.orderCheckPaid.checked = Boolean(order.checks.paid);
+  dom.orderCheckComplete.checked = Boolean(order.checks.complete);
+  dom.orderChecklistPanel.classList.remove("hidden");
+}
+
+function updateOrderCheck(checkName, checked) {
+  ensureOrdersState();
+  const order = state.orders.open.find((item) => item.id === selectedOrderId);
+  if (!order || !Object.prototype.hasOwnProperty.call(order.checks, checkName)) return;
+
+  order.checks[checkName] = checked;
+  const isCompleted = order.checks.received && order.checks.paid && order.checks.complete;
+
+  if (isCompleted) {
+    order.completedAt = nowIso();
+    state.orders.completed.unshift(order);
+    state.orders.open = state.orders.open.filter((item) => item.id !== order.id);
+    selectedOrderId = null;
+    selectedOrdersHistoryMonth = monthKey(order.completedAt);
+  }
+
+  saveState();
+  renderOrdersControl();
+}
+
+function monthKey(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  return `${date.getFullYear()}-${month}`;
+}
+
+function monthLabel(key) {
+  if (!key) return "Sin mes";
+  const [year, month] = key.split("-").map(Number);
+  const date = new Date(year, month - 1, 1);
+  return date.toLocaleDateString("es-MX", { month: "long", year: "numeric" });
+}
+
+function toggleOrdersHistory() {
+  ordersHistoryVisible = !ordersHistoryVisible;
+  renderOrdersHistory();
+}
+
+function renderOrdersHistory() {
+  dom.ordersHistoryPanel.classList.toggle("hidden", !ordersHistoryVisible);
+  dom.ordersHistoryToggle.textContent = ordersHistoryVisible ? "Ocultar historial" : "Historial mensual";
+
+  if (!ordersHistoryVisible) return;
+
+  ensureOrdersState();
+  const completedOrders = state.orders.completed;
+  const months = [...new Set(completedOrders.map((order) => monthKey(order.completedAt)).filter(Boolean))]
+    .sort()
+    .reverse();
+
+  dom.ordersHistoryMonth.innerHTML = "";
+  dom.ordersHistoryList.innerHTML = "";
+
+  if (!months.length) {
+    selectedOrdersHistoryMonth = "";
+    dom.ordersHistoryMonth.innerHTML = "<option value=''>Sin pedidos completados</option>";
+    dom.ordersHistorySummary.textContent = "Sin pedidos completados.";
+    dom.ordersHistoryList.innerHTML = "<p class='small'>Completa un pedido para guardarlo en el historial mensual.</p>";
+    return;
+  }
+
+  if (!months.includes(selectedOrdersHistoryMonth)) {
+    selectedOrdersHistoryMonth = months[0];
+  }
+
+  months.forEach((key) => {
+    const option = document.createElement("option");
+    option.value = key;
+    option.textContent = monthLabel(key);
+    dom.ordersHistoryMonth.appendChild(option);
+  });
+  dom.ordersHistoryMonth.value = selectedOrdersHistoryMonth;
+
+  const monthOrders = completedOrders.filter((order) => monthKey(order.completedAt) === selectedOrdersHistoryMonth);
+  const total = monthOrders.reduce((acc, order) => acc + Number(order.total || 0), 0);
+  dom.ordersHistorySummary.textContent = `${monthOrders.length} pedido${monthOrders.length === 1 ? "" : "s"} completado${monthOrders.length === 1 ? "" : "s"} | Total ${fmtMoney(total)}`;
+
+  monthOrders.forEach((order) => {
+    const item = document.createElement("div");
+    item.className = "history-order";
+    item.innerHTML = `
+      <div class="history-order-top">
+        <div>
+          <strong>${escapeHtml(order.supplierName)}</strong>
+          <p class="history-order-detail">
+            ${escapeHtml(order.quantity)} x ${escapeHtml(order.productName)} | SKU ${escapeHtml(order.sku)} | ${escapeHtml(order.location)}
+          </p>
+          <p class="small">Completado: ${new Date(order.completedAt).toLocaleString("es-MX")}</p>
+        </div>
+        <strong>${fmtMoney(order.total)}</strong>
+      </div>
+    `;
+    dom.ordersHistoryList.appendChild(item);
   });
 }
 
@@ -1975,7 +2356,8 @@ function exportAsJson() {
     products: state.products,
     sales: state.sales,
     pos: state.pos,
-    cashflow: state.cashflow
+    cashflow: state.cashflow,
+    orders: state.orders
   };
 
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
@@ -1992,12 +2374,16 @@ function resetDemoData() {
   if (!ok) return;
 
   state = deepClone(defaultState);
+  selectedSupplierId = "";
+  selectedOrderId = null;
+  ordersHistoryVisible = false;
+  selectedOrdersHistoryMonth = "";
   saveState();
   renderAll();
 }
 
 function escapeHtml(value) {
-  return value
+  return String(value)
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
@@ -2099,6 +2485,31 @@ function bindEvents() {
   dom.cashflowForm.addEventListener("submit", saveCashflowInitialCapital);
   dom.cashflowStoreCapitalForm.addEventListener("submit", saveCashflowStoreCapital);
   dom.cashflowRegisterSelect.addEventListener("change", onCashflowRegisterSelectionChange);
+  dom.providersGrid.addEventListener("click", (event) => {
+    const btn = event.target.closest(".provider-tile");
+    if (!btn) return;
+    openSupplierOrderPanel(btn.dataset.supplierId);
+  });
+  dom.supplierOrderClose.addEventListener("click", closeSupplierOrderPanel);
+  dom.supplierOrderForm.addEventListener("submit", saveSupplierOrder);
+  dom.supplierOrderQuantity.addEventListener("input", updateSupplierOrderTotal);
+  dom.supplierOrderUnitCost.addEventListener("input", updateSupplierOrderTotal);
+  dom.openOrdersList.addEventListener("click", (event) => {
+    const btn = event.target.closest(".open-order-button");
+    if (!btn) return;
+    selectedOrderId = btn.dataset.orderId;
+    renderOrdersControl();
+  });
+  dom.orderChecklistPanel.addEventListener("change", (event) => {
+    const checkbox = event.target.closest("input[type='checkbox'][data-check]");
+    if (!checkbox) return;
+    updateOrderCheck(checkbox.dataset.check, checkbox.checked);
+  });
+  dom.ordersHistoryToggle.addEventListener("click", toggleOrdersHistory);
+  dom.ordersHistoryMonth.addEventListener("change", () => {
+    selectedOrdersHistoryMonth = dom.ordersHistoryMonth.value;
+    renderOrdersHistory();
+  });
   dom.removeLogoBtn.addEventListener("click", removeLogo);
   dom.applyFilters.addEventListener("click", applySalesFilters);
   dom.clearFilters.addEventListener("click", clearSalesFilters);
