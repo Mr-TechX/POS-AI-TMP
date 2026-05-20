@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>POS Web</title>
   <link id="dynamic-favicon" rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%234fa2ff'/%3E%3Ctext x='50%25' y='56%25' text-anchor='middle' font-size='26' fill='white' font-family='Arial'%3EP%3C/text%3E%3C/svg%3E" />
-  <link rel="stylesheet" href="styles.css?v=accounts-password-1" />
+  <link rel="stylesheet" href="styles.css?v=orders-control-1" />
   <script>
     window.__pendingAccountEditId = "";
     window.editAccount = function (accountId) {
@@ -38,8 +38,10 @@
       <div class="auth-hint">
         <p class="small">Cuentas demo:</p>
         <ul class="small list">
-          <li>Vendedor: <code>JoseLA</code> / <code>Venta123!</code></li>
+          <li>Vendedor: <code>JoseLA</code> / <code>Ventas123!</code></li>
           <li>Almacen: <code>DanielJ</code> / <code>Stock123!</code></li>
+          <li>Compras: <code>ComprasTP</code> / <code>Compras123!</code></li>
+          <li>Contabilidad: <code>ContabilidadTP</code> / <code>Conta123!</code></li>
         </ul>
       </div>
     </article>
@@ -80,6 +82,7 @@
     <button class="tab" data-view="products">Productos</button>
     <button class="tab" data-view="sales">Ventas</button>
     <button class="tab" data-view="cashflow">Flujo de caja</button>
+    <button class="tab" data-view="orders">Control de pedidos</button>
     <button class="tab" data-view="settings">Configuracion</button>
   </nav>
 
@@ -362,6 +365,80 @@
       </div>
     </section>
 
+    <section id="orders" class="view">
+      <div class="section-head">
+        <h2>Control de pedidos</h2>
+        <button id="orders-history-toggle" class="btn ghost" type="button">Historial mensual</button>
+      </div>
+
+      <article id="orders-history-panel" class="card orders-history-panel hidden">
+        <div class="orders-history-head">
+          <div>
+            <h3>Historial por mes</h3>
+            <p id="orders-history-summary" class="small">Sin pedidos completados.</p>
+          </div>
+          <label>
+            Mes
+            <select id="orders-history-month"></select>
+          </label>
+        </div>
+        <div id="orders-history-list" class="orders-history-list"></div>
+      </article>
+
+      <div class="grid two orders-layout">
+        <article class="card providers-card">
+          <h3>Proveedores</h3>
+          <div id="providers-grid" class="providers-grid"></div>
+
+          <div id="supplier-order-panel" class="supplier-order-panel hidden">
+            <div class="panel-head">
+              <div>
+                <h4 id="supplier-order-title">Nuevo pedido</h4>
+                <p id="supplier-order-subtitle" class="small"></p>
+              </div>
+              <button id="supplier-order-close" class="btn ghost" type="button">Cerrar</button>
+            </div>
+            <form id="supplier-order-form" class="form">
+              <input id="supplier-order-provider-id" type="hidden" />
+              <label>Nombre del producto <input id="supplier-order-product-name" required /></label>
+              <label>SKU <input id="supplier-order-sku" required /></label>
+              <label>Cantidad <input id="supplier-order-quantity" type="number" min="1" step="1" required /></label>
+              <label>Costo unitario <input id="supplier-order-unit-cost" type="number" min="0" step="0.01" required /></label>
+              <label>Ubicacion <input id="supplier-order-location" maxlength="80" placeholder="Ej. Pasillo 2 / Bodega" required /></label>
+              <div class="order-total-preview">
+                <span>Total del pedido</span>
+                <strong id="supplier-order-total">$0.00</strong>
+              </div>
+              <button class="btn" type="submit">Hacer pedido</button>
+            </form>
+          </div>
+        </article>
+
+        <article class="card orders-card">
+          <div class="orders-card-head">
+            <h3>Pedidos</h3>
+            <span id="open-orders-count" class="badge">0 abiertos</span>
+          </div>
+          <ul id="open-orders-list" class="open-orders-list"></ul>
+
+          <div id="order-checklist-panel" class="order-checklist-panel hidden">
+            <div class="panel-head">
+              <div>
+                <h4 id="order-checklist-title">Validar pedido</h4>
+                <p id="order-checklist-details" class="small"></p>
+              </div>
+              <strong id="order-checklist-total">$0.00</strong>
+            </div>
+            <div class="checklist">
+              <label><input id="order-check-received" type="checkbox" data-check="received" /> Recibido</label>
+              <label><input id="order-check-paid" type="checkbox" data-check="paid" /> Pagado</label>
+              <label><input id="order-check-complete" type="checkbox" data-check="complete" /> Completo</label>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
     <section id="settings" class="view">
       <h2>Configuracion</h2>
       <div class="grid two settings-grid">
@@ -395,7 +472,7 @@
         <article class="card">
           <h3>Cuentas de acceso</h3>
           <p class="small">Solo el administrador puede crear o editar cuentas para el login.</p>
-          <p id="accounts-count" class="small">3 cuentas registradas</p>
+          <p id="accounts-count" class="small">5 cuentas registradas</p>
           <form id="account-form" class="form account-form">
             <input id="account-id" type="hidden" />
             <label>
@@ -415,6 +492,8 @@
               <select id="account-role" required>
                 <option value="seller">Vendedor</option>
                 <option value="warehouse">Almacen</option>
+                <option value="purchases">Compras</option>
+                <option value="accounting">Contabilidad</option>
                 <option value="admin">Administrador</option>
               </select>
             </label>
@@ -487,6 +566,40 @@
                     </div>
                   </td>
                 </tr>
+                <tr>
+                  <td>Compras</td>
+                  <td>ComprasTP</td>
+                  <td>
+                    <div class="password-cell">
+                      <span class="small account-password-value">******</span>
+                      <button class="btn ghost" type="button" data-action="toggle-password" data-id="user-purchases-demo">Mostrar</button>
+                    </div>
+                  </td>
+                  <td><span class="badge">Compras</span></td>
+                  <td>
+                    <div class="table-actions">
+                      <button class="btn ghost" type="button" data-action="edit-account" data-id="user-purchases-demo" onclick="editAccount('user-purchases-demo')">Editar</button>
+                      <span class="small">No eliminable</span>
+                    </div>
+                  </td>
+                </tr>
+                <tr>
+                  <td>Contabilidad</td>
+                  <td>ContabilidadTP</td>
+                  <td>
+                    <div class="password-cell">
+                      <span class="small account-password-value">******</span>
+                      <button class="btn ghost" type="button" data-action="toggle-password" data-id="user-accounting-demo">Mostrar</button>
+                    </div>
+                  </td>
+                  <td><span class="badge">Contabilidad</span></td>
+                  <td>
+                    <div class="table-actions">
+                      <button class="btn ghost" type="button" data-action="edit-account" data-id="user-accounting-demo" onclick="editAccount('user-accounting-demo')">Editar</button>
+                      <span class="small">No eliminable</span>
+                    </div>
+                  </td>
+                </tr>
               </tbody>
             </table>
           </div>
@@ -528,6 +641,8 @@
           <select id="account-edit-role" required>
             <option value="seller">Vendedor</option>
             <option value="warehouse">Almacen</option>
+            <option value="purchases">Compras</option>
+            <option value="accounting">Contabilidad</option>
             <option value="admin">Administrador</option>
           </select>
         </label>
@@ -546,6 +661,6 @@
     </button>
   </template>
 
-  <script src="app.js?v=accounts-password-1"></script>
+  <script src="app.js?v=accounting-cashflow-1"></script>
 </body>
 </html>
