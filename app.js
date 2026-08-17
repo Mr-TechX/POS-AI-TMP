@@ -8,11 +8,11 @@ const CASH_REGISTERS = [
   { id: "box-5", name: "Caja 5" }
 ];
 const SUPPLIERS = [
-  { id: "coca-cola", name: "Coca-Cola", category: "Bebidas" },
-  { id: "barcel", name: "Barcel", category: "Botanas" },
-  { id: "sabritas", name: "Sabritas", category: "Botanas" },
-  { id: "bimbo", name: "Bimbo", category: "Panificacion" },
-  { id: "lala", name: "Lala", category: "Lacteos" }
+  { id: "AMD", name: "AMD", category: "Procesadores" },
+  { id: "INTEL", name: "INTEL", category: "Procesadores" },
+  { id: "Razer", name: "Razer", category: "Perifericos" },
+  { id: "Corsair", name: "Corsair", category: "Perifericos" },
+  { id: "Alienware", name: "Alienware", category: "Computadoras" }
 ];
 const DEMO_USERS = [
   { id: "user-admin-demo", username: "UlisesLC", password: "5js0qxuh#", role: "admin", displayName: "Administrador" },
